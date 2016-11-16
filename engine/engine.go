@@ -2,12 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"github.com/huichen/murmur"
-	"github.com/huichen/sego"
-	"github.com/huichen/wukong/core"
-	"github.com/huichen/wukong/storage"
-	"github.com/huichen/wukong/types"
-	"github.com/huichen/wukong/utils"
 	"log"
 	"os"
 	"runtime"
@@ -15,11 +9,23 @@ import (
 	"strconv"
 	"sync/atomic"
 	"time"
+
+	"github.com/huichen/murmur"
+	"github.com/huichen/sego"
+	"github.com/huichen/wukong/core"
+	"github.com/huichen/wukong/storage"
+	"github.com/huichen/wukong/types"
+	"github.com/huichen/wukong/utils"
 )
 
 const (
 	NumNanosecondsInAMillisecond = 1000000
 	PersistentStorageFilePrefix  = "wukong"
+)
+
+var (
+	SegmentersMap = map[string]*sego.Segmenter{}
+	StopTokensMap = map[string]*StopTokens{}
 )
 
 type Engine struct {
@@ -72,11 +78,20 @@ func (engine *Engine) Init(options types.EngineInitOptions) {
 	engine.initialized = true
 
 	if !options.NotUsingSegmenter {
+		if SegmentersMap[options.SegmenterDictionaries] == nil {
+			SegmentersMap[options.SegmenterDictionaries] = &sego.Segmenter{}
+			SegmentersMap[options.SegmenterDictionaries].LoadDictionary(options.SegmenterDictionaries)
+		}
 		// 载入分词器词典
-		engine.segmenter.LoadDictionary(options.SegmenterDictionaries)
+		engine.segmenter = *SegmentersMap[options.SegmenterDictionaries]
+
+		if StopTokensMap[options.StopTokenFile] == nil {
+			StopTokensMap[options.StopTokenFile] = &StopTokens{}
+			StopTokensMap[options.StopTokenFile].Init(options.StopTokenFile)
+		}
 
 		// 初始化停用词
-		engine.stopTokens.Init(options.StopTokenFile)
+		engine.stopTokens = *StopTokensMap[options.StopTokenFile]
 	}
 
 	// 初始化索引器和排序器
